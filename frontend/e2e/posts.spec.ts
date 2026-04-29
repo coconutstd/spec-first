@@ -108,7 +108,7 @@ test.describe('게시글 작성', () => {
     await page.getByLabel('본문').fill('안녕하세요');
     await page.getByRole('button', { name: '등록' }).click();
     await expect(page).toHaveURL(/\/posts\/\d+/);
-    await expect(page.getByText('첫 번째 글')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '첫 번째 글', level: 1 })).toBeVisible();
   });
 
   test('제목 미입력 시 에러 메시지가 표시된다', async ({ page }) => {
@@ -143,14 +143,14 @@ test.describe('게시글 수정', () => {
     await page.goto(`/posts/${post.id}`);
     await page.getByRole('button', { name: '수정' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
-    await page.getByLabel('비밀번호').fill('1234');
+    await page.getByRole('dialog').getByLabel('비밀번호').fill('1234');
     await page.getByRole('button', { name: '확인' }).click();
     await expect(page).toHaveURL(`/posts/${post.id}/edit`);
     await page.getByLabel('제목').clear();
     await page.getByLabel('제목').fill('수정된 제목');
     await page.getByRole('button', { name: '저장' }).click();
     await expect(page).toHaveURL(`/posts/${post.id}`);
-    await expect(page.getByText('수정된 제목')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '수정된 제목', level: 1 })).toBeVisible();
   });
 
   test('비밀번호 불일치 시 에러 메시지가 표시된다', async ({ page }) => {
@@ -158,7 +158,7 @@ test.describe('게시글 수정', () => {
     await page.goto(`/posts/${post.id}`);
     await page.getByRole('button', { name: '수정' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
-    await page.getByLabel('비밀번호').fill('0000');
+    await page.getByRole('dialog').getByLabel('비밀번호').fill('0000');
     await page.getByRole('button', { name: '확인' }).click();
     // 비밀번호 불일치: 모달에서 바로 에러 메시지 표시, 페이지 이동 없음
     await expect(page.getByText('비밀번호가 일치하지 않습니다')).toBeVisible();
@@ -188,7 +188,7 @@ test.describe('게시글 삭제', () => {
     await page.goto(`/posts/${post.id}`);
     await page.getByRole('button', { name: '삭제' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
-    await page.getByLabel('비밀번호').fill('1234');
+    await page.getByRole('dialog').getByLabel('비밀번호').fill('1234');
     await page.getByRole('button', { name: '확인' }).click();
     await expect(page).toHaveURL('/');
   });
@@ -197,7 +197,8 @@ test.describe('게시글 삭제', () => {
     const post = await createTestPost(page, { title: '삭제 실패 테스트', password: '1234' });
     await page.goto(`/posts/${post.id}`);
     await page.getByRole('button', { name: '삭제' }).click();
-    await page.getByLabel('비밀번호').fill('9999');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('dialog').getByLabel('비밀번호').fill('9999');
     await page.getByRole('button', { name: '확인' }).click();
     await expect(page.getByText('비밀번호가 일치하지 않습니다')).toBeVisible();
     await expect(page).toHaveURL(`/posts/${post.id}`);
