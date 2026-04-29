@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: board-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-board}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-board1234}
+      POSTGRES_DB: ${POSTGRES_DB:-board_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-board} -d ${POSTGRES_DB:-board_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - board-net
+
+volumes:
+  postgres_data:
+
+networks:
+  board-net:
+    driver: bridge
