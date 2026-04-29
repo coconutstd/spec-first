@@ -59,6 +59,10 @@ bdd-test/
 
 ---
 
+## 산출물 의존 관계
+
+![산출물 의존 관계도](docs/artifact_dependency_flow.svg)
+
 ## 문서
 
 | 문서 | 설명 |
