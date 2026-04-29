@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../../src/app.module';
+import { HttpExceptionFilter } from '../../src/common/filters/http-exception.filter';
 
 // BDD: 백엔드 시나리오 — 게시글 API (docs/BDD.md 기준)
 
@@ -14,7 +15,10 @@ describe('게시글 API (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
+    app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
   });
 
@@ -45,7 +49,23 @@ describe('게시글 API (e2e)', () => {
     });
 
     it('삭제된 게시글은 목록에 포함되지 않는다', async () => {
-      // TODO: 소프트 삭제된 게시글 fixture 생성 후 검증
+      // fixture: 게시글 작성 후 삭제
+      const createRes = await request(app.getHttpServer())
+        .post('/posts')
+        .send({ nickname: '삭제용', password: 'pass1234', title: '삭제될글', body: '내용' })
+        .expect(201);
+
+      const postId = createRes.body.id;
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${postId}`)
+        .send({ password: 'pass1234' })
+        .expect(200);
+
+      const listRes = await request(app.getHttpServer()).get('/posts').expect(200);
+
+      const ids = listRes.body.data.map((p: any) => p.id);
+      expect(ids).not.toContain(postId);
     });
 
     it('빈 검색어로 요청하면 전체 목록을 반환한다', async () => {
@@ -70,11 +90,40 @@ describe('게시글 API (e2e)', () => {
     });
 
     it('삭제된 게시글 조회 시 404와 POST_DELETED를 반환한다', async () => {
-      // TODO: 소프트 삭제된 게시글 fixture 생성 후 검증
+      // fixture: 게시글 작성 후 삭제
+      const createRes = await request(app.getHttpServer())
+        .post('/posts')
+        .send({ nickname: '삭제유저', password: 'pass1234', title: '삭제게시글', body: '본문' })
+        .expect(201);
+
+      const postId = createRes.body.id;
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${postId}`)
+        .send({ password: 'pass1234' })
+        .expect(200);
+
+      return request(app.getHttpServer())
+        .get(`/posts/${postId}`)
+        .expect(404)
+        .expect(({ body }) => {
+          expect(body.code).toBe('POST_DELETED');
+        });
     });
 
     it('조회할 때마다 viewCount가 1 증가한다', async () => {
-      // TODO: 게시글 fixture 생성 후 검증
+      // fixture: 게시글 작성
+      const createRes = await request(app.getHttpServer())
+        .post('/posts')
+        .send({ nickname: '조회유저', password: 'pass1234', title: '조회테스트', body: '본문' })
+        .expect(201);
+
+      const postId = createRes.body.id;
+
+      const first = await request(app.getHttpServer()).get(`/posts/${postId}`).expect(200);
+      const second = await request(app.getHttpServer()).get(`/posts/${postId}`).expect(200);
+
+      expect(second.body.viewCount).toBe(first.body.viewCount + 1);
     });
   });
 
@@ -132,11 +181,40 @@ describe('게시글 API (e2e)', () => {
   // BDD: Feature: PATCH /posts/:id — 게시글 수정
   describe('PATCH /posts/:id', () => {
     it('올바른 비밀번호로 수정하면 title과 body가 변경된다', async () => {
-      // TODO: 게시글 fixture 생성 후 검증
+      // fixture: 게시글 작성
+      const createRes = await request(app.getHttpServer())
+        .post('/posts')
+        .send({ nickname: '수정유저', password: 'pass1234', title: '원본제목', body: '원본본문' })
+        .expect(201);
+
+      const postId = createRes.body.id;
+
+      return request(app.getHttpServer())
+        .patch(`/posts/${postId}`)
+        .send({ password: 'pass1234', title: '수정된 제목', body: '수정된 본문' })
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body.title).toBe('수정된 제목');
+          expect(body.body).toBe('수정된 본문');
+        });
     });
 
     it('비밀번호 불일치 시 403과 INVALID_PASSWORD를 반환한다', async () => {
-      // TODO: 게시글 fixture 생성 후 검증
+      // fixture: 게시글 작성
+      const createRes = await request(app.getHttpServer())
+        .post('/posts')
+        .send({ nickname: '수정유저', password: 'pass1234', title: '제목', body: '본문' })
+        .expect(201);
+
+      const postId = createRes.body.id;
+
+      return request(app.getHttpServer())
+        .patch(`/posts/${postId}`)
+        .send({ password: 'wrongpass', title: '수정제목' })
+        .expect(403)
+        .expect(({ body }) => {
+          expect(body.code).toBe('INVALID_PASSWORD');
+        });
     });
 
     it('존재하지 않는 게시글 수정 시 404를 반환한다', async () => {
@@ -150,11 +228,57 @@ describe('게시글 API (e2e)', () => {
   // BDD: Feature: DELETE /posts/:id — 게시글 삭제
   describe('DELETE /posts/:id', () => {
     it('올바른 비밀번호로 삭제하면 게시글과 댓글이 소프트 삭제된다', async () => {
-      // TODO: 게시글 + 댓글 fixture 생성 후 검증
+      // fixture: 게시글 작성 후 댓글 2개 추가
+      const createRes = await request(app.getHttpServer())
+        .post('/posts')
+        .send({ nickname: '삭제유저', password: 'pass1234', title: '삭제글', body: '본문' })
+        .expect(201);
+
+      const postId = createRes.body.id;
+
+      await request(app.getHttpServer())
+        .post(`/posts/${postId}/comments`)
+        .send({ nickname: '댓글러1', password: 'comm1234', body: '댓글1' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/posts/${postId}/comments`)
+        .send({ nickname: '댓글러2', password: 'comm1234', body: '댓글2' })
+        .expect(201);
+
+      const deleteRes = await request(app.getHttpServer())
+        .delete(`/posts/${postId}`)
+        .send({ password: 'pass1234' })
+        .expect(200);
+
+      expect(deleteRes.body.id).toBe(postId);
+      expect(deleteRes.body.deletedAt).toBeDefined();
+
+      // 삭제된 게시글 조회 시 POST_DELETED 반환
+      return request(app.getHttpServer())
+        .get(`/posts/${postId}`)
+        .expect(404)
+        .expect(({ body }) => {
+          expect(body.code).toBe('POST_DELETED');
+        });
     });
 
     it('비밀번호 불일치 시 403과 INVALID_PASSWORD를 반환한다', async () => {
-      // TODO: 게시글 fixture 생성 후 검증
+      // fixture: 게시글 작성
+      const createRes = await request(app.getHttpServer())
+        .post('/posts')
+        .send({ nickname: '삭제유저', password: 'pass1234', title: '삭제글', body: '본문' })
+        .expect(201);
+
+      const postId = createRes.body.id;
+
+      return request(app.getHttpServer())
+        .delete(`/posts/${postId}`)
+        .send({ password: 'wrongpass' })
+        .expect(403)
+        .expect(({ body }) => {
+          expect(body.code).toBe('INVALID_PASSWORD');
+        });
     });
   });
 });
