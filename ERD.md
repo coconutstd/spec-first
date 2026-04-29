@@ -29,7 +29,7 @@ erDiagram
         TIMESTAMP   created_at
     }
 
-    post ||--o{ comment : "has"
+    post ||--o{ comment : "has (cascade soft-delete)"
 ```
 
 ---
@@ -89,5 +89,6 @@ erDiagram
 
 - **회원 테이블 없음** — 닉네임 + 비밀번호를 각 게시글·댓글에 직접 저장 (PRD 인증 없는 게시판 요건)
 - **소프트 삭제** — `is_deleted` 플래그로 처리, 데이터 복구 가능성 확보
+- **Cascade soft-delete** — 게시글 소프트 삭제 시 달린 댓글도 일괄 is_deleted = true 처리 (DB 레벨 CASCADE 미사용, 애플리케이션 레벨에서 트랜잭션으로 처리)
 - **비밀번호 평문 미저장** — bcrypt 해시만 저장, 원본 비교는 bcrypt.compare 사용
 - **comment.updated_at 미포함** — PRD에서 댓글 수정 기능이 v1.0 범위 외

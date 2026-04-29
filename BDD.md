@@ -67,6 +67,10 @@ Feature: 게시글 상세 조회
     Given id가 99인 게시글이 삭제되어 있다
     When 사용자가 "/posts/99"에 접속한다
     Then "삭제된 게시글입니다" 안내 문구가 표시된다
+
+  Scenario: 존재하지 않는 게시글에 접근하면 안내 메시지가 표시된다
+    When 사용자가 "/posts/99999"에 접속한다
+    Then "존재하지 않는 게시글입니다" 안내 문구가 표시된다
 ```
 
 ---
@@ -127,6 +131,16 @@ Feature: 게시글 수정
     And "0000"을 입력하고 확인 버튼을 클릭한다
     Then "비밀번호가 일치하지 않습니다" 에러 메시지가 표시된다
     And 수정 페이지로 이동하지 않는다
+
+  Scenario: 비밀번호 모달에서 취소 버튼 클릭 시 모달이 닫힌다
+    When 사용자가 "/posts/1"에서 "수정" 버튼을 클릭한다
+    Then 비밀번호 입력 모달이 표시된다
+    When 취소 버튼을 클릭한다
+    Then 모달이 닫히고 "/posts/1" 페이지가 유지된다
+
+  Scenario: 수정 페이지 직접 URL 접근 시 상세 페이지로 리다이렉트된다
+    When 사용자가 비밀번호 검증 없이 "/posts/1/edit"에 직접 접속한다
+    Then "/posts/1" 페이지로 리다이렉트된다
 ```
 
 ---
@@ -146,11 +160,23 @@ Feature: 게시글 삭제
     Then "/" 목록 페이지로 이동한다
     And 삭제된 게시글이 목록에 표시되지 않는다
 
+  Scenario: 게시글 삭제 시 달린 댓글도 함께 삭제된다
+    Given "/posts/1"에 댓글이 3개 달려 있다
+    When 올바른 비밀번호로 게시글을 삭제한다
+    Then "/" 목록 페이지로 이동한다
+    And 삭제된 게시글의 URL("/posts/1")에 접근하면 "삭제된 게시글입니다"가 표시된다
+
   Scenario: 비밀번호 불일치 시 삭제가 되지 않는다
     When 사용자가 "/posts/1"에서 "삭제" 버튼을 클릭한다
     And "9999"를 입력하고 확인 버튼을 클릭한다
     Then "비밀번호가 일치하지 않습니다" 에러 메시지가 표시된다
     And 게시글이 목록에 여전히 표시된다
+
+  Scenario: 삭제 모달에서 취소 버튼 클릭 시 모달이 닫힌다
+    When 사용자가 "/posts/1"에서 "삭제" 버튼을 클릭한다
+    Then 비밀번호 입력 모달이 표시된다
+    When 취소 버튼을 클릭한다
+    Then 모달이 닫히고 "/posts/1" 페이지가 유지된다
 ```
 
 ---
@@ -207,6 +233,35 @@ Feature: 키워드 검색
     And 표시된 게시글의 제목 또는 본문에 "NestJS"가 포함되어 있다
 
   Scenario: 검색 결과가 없는 경우 안내 메시지가 표시된다
+    When 검색창에 "존재하지않는키워드xyz"를 입력하고 검색 버튼을 클릭한다
+    Then "검색 결과가 없습니다" 메시지가 표시된다
+
+  Scenario: 빈 검색어로 검색하면 전체 목록이 표시된다
+    When 검색창을 비워두고 검색 버튼을 클릭한다
+    Then URL이 "/"로 변경된다
+    And 전체 게시글 목록이 표시된다
+
+  Scenario: 검색 결과가 21건 이상이면 페이지네이션이 표시된다
+    Given "NestJS"가 포함된 게시글이 21건 존재한다
+    When 검색창에 "NestJS"를 입력하고 검색 버튼을 클릭한다
+    Then 검색 결과 20건이 표시된다
+    And 페이지네이션 컨트롤이 표시된다
+    And "다음" 버튼을 클릭하면 나머지 1건이 표시된다
+```
+
+---
+
+## Feature: 빈 상태
+
+```gherkin
+Feature: 빈 상태
+
+  Scenario: 게시글이 없을 때 목록 페이지에 안내 문구가 표시된다
+    Given 등록된 게시글이 없다
+    When 사용자가 "/" 경로에 접속한다
+    Then "아직 게시글이 없습니다" 안내 문구가 표시된다
+
+  Scenario: 검색 결과가 없을 때 안내 문구가 표시된다
     When 검색창에 "존재하지않는키워드xyz"를 입력하고 검색 버튼을 클릭한다
     Then "검색 결과가 없습니다" 메시지가 표시된다
 ```
@@ -282,14 +337,16 @@ Feature: GET /posts/:id — 게시글 상세 조회
     When GET /posts/1 요청을 두 번 보낸다
     Then 두 번째 응답의 viewCount가 7이다
 
-  Scenario: 존재하지 않는 id 조회 시 404를 반환한다
-    When GET /posts/99999 요청을 보낸다
-    Then 상태 코드 404를 반환한다
-
-  Scenario: 삭제된 게시글 조회 시 404를 반환한다
+  Scenario: 삭제된 게시글 조회 시 404와 구분자를 반환한다
     Given id=2인 게시글이 소프트 삭제되어 있다
     When GET /posts/2 요청을 보낸다
     Then 상태 코드 404를 반환한다
+    And 응답 body의 code가 "POST_DELETED"이다
+
+  Scenario: 존재하지 않는 게시글 조회 시 404와 구분자를 반환한다
+    When GET /posts/99999 요청을 보낸다
+    Then 상태 코드 404를 반환한다
+    And 응답 body의 code가 "POST_NOT_FOUND"이다
 ```
 
 ---
@@ -339,13 +396,15 @@ Feature: POST /posts — 게시글 작성
 ```gherkin
 Feature: PATCH /posts/:id — 게시글 수정
 
-  Scenario: 올바른 비밀번호로 수정하면 내용이 변경된다
+  Scenario: 올바른 비밀번호로 제목과 본문을 수정하면 내용이 변경된다
     Given id=1인 게시글이 비밀번호 "1234"로 작성되어 있다
     When PATCH /posts/1 요청을 아래 body로 보낸다
       | password | 1234       |
       | title    | 수정된 제목 |
+      | body     | 수정된 본문 |
     Then 상태 코드 200을 반환한다
     And 응답의 title이 "수정된 제목"이다
+    And 응답의 body가 "수정된 본문"이다
     And DB에서 updatedAt이 갱신된다
 
   Scenario: 비밀번호 불일치 시 403을 반환한다
@@ -365,12 +424,14 @@ Feature: PATCH /posts/:id — 게시글 수정
 ```gherkin
 Feature: DELETE /posts/:id — 게시글 삭제
 
-  Scenario: 올바른 비밀번호로 삭제하면 소프트 삭제된다
+  Scenario: 올바른 비밀번호로 삭제하면 게시글과 댓글이 소프트 삭제된다
     Given id=1인 게시글이 비밀번호 "1234"로 작성되어 있다
+    And 해당 게시글에 댓글이 2개 달려 있다
     When DELETE /posts/1 요청을 body { "password": "1234" }로 보낸다
     Then 상태 코드 200을 반환한다
     And DB에서 해당 게시글의 is_deleted가 true이다
-    And GET /posts/1 요청 시 404를 반환한다
+    And DB에서 해당 게시글의 댓글 2개의 is_deleted가 true이다
+    And GET /posts/1 요청 시 404와 code "POST_DELETED"를 반환한다
 
   Scenario: 비밀번호 불일치 시 403을 반환한다
     Given id=1인 게시글이 비밀번호 "1234"로 작성되어 있다
@@ -447,6 +508,18 @@ Feature: GET /posts?q= — 키워드 검색
     When GET /posts?q=존재하지않는키워드xyz 요청을 보낸다
     Then 상태 코드 200을 반환한다
     And data 배열이 비어 있다
+
+  Scenario: 빈 검색어로 요청하면 전체 목록을 반환한다
+    Given 게시글 3건이 저장되어 있다
+    When GET /posts?q= 요청을 보낸다
+    Then 상태 코드 200을 반환한다
+    And data 배열 길이가 3이다
+
+  Scenario: 검색 결과가 21건 이상이면 페이지네이션이 적용된다
+    Given "NestJS"가 포함된 게시글이 21건 저장되어 있다
+    When GET /posts?q=NestJS&page=2 요청을 보낸다
+    Then 상태 코드 200을 반환한다
+    And data 배열 길이가 1이다
 ```
 
 ---
