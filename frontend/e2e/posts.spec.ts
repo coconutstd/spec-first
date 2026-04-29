@@ -13,6 +13,10 @@ async function createTestPost(
       body: overrides.body ?? '테스트 본문입니다.',
     },
   });
+  if (!response.ok()) {
+    const body = await response.json();
+    throw new Error(`createTestPost 실패 (${response.status()}): ${body.code ?? body.message}`);
+  }
   const data = await response.json();
   return data as { id: number; title: string };
 }
